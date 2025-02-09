@@ -1,2 +1,7 @@
+<<<<<<< HEAD
 <key>NSBluetoothAlwaysUsageDescription</key>
 <string>We need Bluetooth access to connect to devices.</string>
+=======
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>We need Bluetooth access to connect to devices.</string>
+>>>>>>> b31f85c (Initial commit: Added Flutter frontend and Python backend)

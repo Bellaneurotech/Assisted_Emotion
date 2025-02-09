@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 cd C:\Users\David\Documents\Bella\my_flutter_web\backend
 
 ..\backend_env\Scripts\activate
@@ -5,4 +6,13 @@ cd C:\Users\David\Documents\Bella\my_flutter_web\backend
 python server.py
 
 
+=======
+cd C:\Users\David\Documents\Bella\my_flutter_web\backend
+
+..\backend_env\Scripts\activate
+
+python server.py
+
+
+>>>>>>> b31f85c (Initial commit: Added Flutter frontend and Python backend)
 cd C:\Users\David\Documents\Bella\my_flutter_web
