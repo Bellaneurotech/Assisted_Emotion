@@ -1,7 +1,7 @@
-<<<<<<< HEAD
 import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_blue/flutter_blue.dart';
 import 'dart:async';
+import 'dart:math';
 
 void main() {
   runApp(const MyApp());
@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Assisted Intuition',
+      title: 'Assisted Emotion',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -33,10 +33,8 @@ class AnimatedHomePage extends StatefulWidget {
 class _AnimatedHomePageState extends State<AnimatedHomePage> {
   String animatedText = "";
   bool showConnectButton = false;
-  bool showDeviceList = false;
-  final String fullText = "Assisted Intuition";
+  final String fullText = "Assisted Emotion";
   int charIndex = 0;
-  List<String> mockDevices = ["Biosensor A", "Biosensor B", "Biosensor C"];
 
   @override
   void initState() {
@@ -69,58 +67,40 @@ class _AnimatedHomePageState extends State<AnimatedHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: showConnectButton || showDeviceList
+      appBar: showConnectButton
           ? AppBar(
-              title: const Text('Assisted Intuition'),
+              title: const Text('Assisted Emotion'),
               backgroundColor: Theme.of(context).colorScheme.inversePrimary,
             )
           : null,
       body: Center(
-        child: showDeviceList
-            ? ListView.builder(
-                itemCount: mockDevices.length,
-                itemBuilder: (context, index) {
-                  final device = mockDevices[index];
-                  return ListTile(
-                    title: Text(
-                      device,
-                      style: const TextStyle(color: Colors.white),
+        child: showConnectButton
+            ? ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 40),
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const GraphScreen(deviceName: "Biosensor"),
                     ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GraphScreen(deviceName: device),
-                        ),
-                      );
-                    },
                   );
                 },
+                child: const Text('Biosensor'),
               )
-            : showConnectButton
-                ? ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 40),
-                      textStyle: const TextStyle(fontSize: 18),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        showDeviceList = true;
-                      });
-                    },
-                    child: const Text('Connect'),
-                  )
-                : Text(
-                    animatedText,
-                    style: const TextStyle(
-                      fontSize: 32,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+            : Text(
+                animatedText,
+                style: const TextStyle(
+                  fontSize: 32,
+                  color: Colors.lightBlue,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
       ),
     );
   }
@@ -136,14 +116,13 @@ class GraphScreen extends StatefulWidget {
 
 class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin {
   late AnimationController _animationController;
-  final _channel = WebSocketChannel.connect(
-    Uri.parse('ws://127.0.0.1:8000'),
-  );
+  FlutterBlue flutterBlue = FlutterBlue.instance;
+  late BluetoothDevice device;
+  late BluetoothCharacteristic characteristic;
 
-  double xPos = 0.0, yPos = 0.0, zPos = 0.0;
-  Color orbColor = Colors.red;
-  final List<ColorEntry> colorHistory = [];
-  final int historyDuration = 600; // in seconds (10 minutes)
+  List<double> sensor1Values = [];
+  List<double> sensor2Values = [];
+  Color orbColor = Colors.lightBlue;
 
   @override
   void initState() {
@@ -152,326 +131,103 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _channel.stream.listen((message) {
-      final data = message.split(',');
-      final x = double.parse(data[0]);
-      final y = double.parse(data[1]);
-      final z = double.parse(data[2]);
-
-      setState(() {
-        xPos = x;
-        yPos = y;
-        zPos = z;
-
-        // Calculate HSL values based on x, y, and z
-        final hue = (x - y) * 360;
-        final saturation = z;
-        final lightness = (x + y) / 2;
-
-        orbColor = HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
-        final now = DateTime.now();
-        colorHistory.add(ColorEntry(orbColor, now));
-
-        // Remove old colors from history
-        colorHistory.removeWhere((entry) {
-          return now.difference(entry.timestamp).inSeconds > historyDuration;
-        });
-      });
-
-      _animationController.forward(from: 0.0);
-    });
+    _connectToDevice();
   }
 
-  @override
-  void dispose() {
-    _channel.sink.close();
-    _animationController.dispose();
-    super.dispose();
-  }
+  void _connectToDevice() async {
+    // Scan for devices
+    flutterBlue.startScan(timeout: const Duration(seconds: 4));
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Connected to ${widget.deviceName}'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      backgroundColor: Colors.black,
-      body: Row(
-        children: [
-          // Color bar on the left
-          ColorBar(colorHistory: colorHistory, historyDuration: historyDuration),
-          // Orb in the center
-          Expanded(
-            child: Center(
-              child: AnimatedBuilder(
-                animation: _animationController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: Size.infinite,
-                    painter: OrbPainter(xPos, yPos, zPos, orbColor),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class OrbPainter extends CustomPainter {
-  final double xPos, yPos, zPos;
-  final Color orbColor;
-
-  OrbPainter(this.xPos, this.yPos, this.zPos, this.orbColor);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [orbColor.withOpacity(0.5), orbColor],
-        stops: [0.5, 1.0],
-      ).createShader(Rect.fromCircle(center: Offset(size.width / 2, size.height / 2), radius: 100));
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(center, 100, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class ColorEntry {
-  final Color color;
-  final DateTime timestamp;
-
-  ColorEntry(this.color, this.timestamp);
-}
-
-class ColorBar extends StatelessWidget {
-  final List<ColorEntry> colorHistory;
-  final int historyDuration;
-
-  ColorBar({required this.colorHistory, required this.historyDuration});
-
-  @override
-  Widget build(BuildContext context) {
-    // Calculate the percentage of each color in the history
-    final colorCounts = <Color, int>{};
-    for (var entry in colorHistory) {
-      colorCounts[entry.color] = (colorCounts[entry.color] ?? 0) + 1;
-    }
-
-    final totalCount = colorHistory.length;
-    final colorPercentages = colorCounts.map((color, count) {
-      return MapEntry(color, count / totalCount);
-    });
-
-    return Container(
-      width: 50,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: colorPercentages.entries.map((entry) {
-          return Expanded(
-            flex: (entry.value * 100).toInt(),
-            child: Container(
-              color: entry.key,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-=======
-import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'dart:async';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Assisted Intuition',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const AnimatedHomePage(),
-    );
-  }
-}
-
-class AnimatedHomePage extends StatefulWidget {
-  const AnimatedHomePage({super.key});
-
-  @override
-  State<AnimatedHomePage> createState() => _AnimatedHomePageState();
-}
-
-class _AnimatedHomePageState extends State<AnimatedHomePage> {
-  String animatedText = "";
-  bool showConnectButton = false;
-  bool showDeviceList = false;
-  final String fullText = "Assisted Intuition";
-  int charIndex = 0;
-  List<String> mockDevices = ["Biosensor A", "Biosensor B", "Biosensor C"];
-
-  @override
-  void initState() {
-    super.initState();
-    _startTypewriterAnimation();
-  }
-
-  void _startTypewriterAnimation() {
-    Timer.periodic(const Duration(milliseconds: 150), (timer) {
-      if (charIndex < fullText.length) {
-        setState(() {
-          animatedText += fullText[charIndex];
-        });
-        charIndex++;
-      } else {
-        timer.cancel();
-        _fadeOutTextAndShowButton();
+    // Listen to scan results
+    var subscription = flutterBlue.scanResults.listen((results) {
+      for (ScanResult r in results) {
+        if (r.device.name == widget.deviceName) {
+          device = r.device;
+          flutterBlue.stopScan();
+          _connectToCharacteristic();
+          break;
+        }
       }
     });
   }
 
-  void _fadeOutTextAndShowButton() async {
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      showConnectButton = true;
-    });
-  }
+  void _connectToCharacteristic() async {
+    await device.connect();
+    List<BluetoothService> services = await device.discoverServices();
+    for (BluetoothService service in services) {
+      for (BluetoothCharacteristic c in service.characteristics) {
+        if (c.properties.notify) {
+          characteristic = c;
+          await characteristic.setNotifyValue(true);
+          characteristic.value.listen((value) {
+            final sensor1 = value[0].toDouble();
+            final sensor2 = value[1].toDouble();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: showConnectButton || showDeviceList
-          ? AppBar(
-              title: const Text('Assisted Intuition'),
-              backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-            )
-          : null,
-      body: Center(
-        child: showDeviceList
-            ? ListView.builder(
-                itemCount: mockDevices.length,
-                itemBuilder: (context, index) {
-                  final device = mockDevices[index];
-                  return ListTile(
-                    title: Text(
-                      device,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GraphScreen(deviceName: device),
-                        ),
-                      );
-                    },
-                  );
-                },
-              )
-            : showConnectButton
-                ? ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 40),
-                      textStyle: const TextStyle(fontSize: 18),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        showDeviceList = true;
-                      });
-                    },
-                    child: const Text('Connect'),
-                  )
-                : Text(
-                    animatedText,
-                    style: const TextStyle(
-                      fontSize: 32,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-      ),
-    );
-  }
-}
+            setState(() {
+              sensor1Values.add(sensor1);
+              sensor2Values.add(sensor2);
 
-class GraphScreen extends StatefulWidget {
-  final String deviceName;
-  const GraphScreen({super.key, required this.deviceName});
+              // Keep only the last 10 values for phase calculation
+              if (sensor1Values.length > 10) {
+                sensor1Values.removeAt(0);
+                sensor2Values.removeAt(0);
+              }
 
-  @override
-  State<GraphScreen> createState() => _GraphScreenState();
-}
+              // Calculate the phase difference
+              final phaseDifference = calculatePhaseDifference(sensor1Values, sensor2Values);
 
-class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  final _channel = WebSocketChannel.connect(
-    Uri.parse('ws://127.0.0.1:8000'),
-  );
+              // Map the phase difference to a color
+              orbColor = getColorFromPhaseDifference(phaseDifference);
+            });
 
-  double xPos = 0.0, yPos = 0.0, zPos = 0.0;
-  Color orbColor = Colors.red;
-  final List<ColorEntry> colorHistory = [];
-  final int historyDuration = 600; // in seconds (10 minutes)
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _channel.stream.listen((message) {
-      final data = message.split(',');
-      final x = double.parse(data[0]);
-      final y = double.parse(data[1]);
-      final z = double.parse(data[2]);
-
-      setState(() {
-        xPos = x;
-        yPos = y;
-        zPos = z;
-
-        // Calculate HSL values based on x, y, and z
-        final hue = (x - y) * 360;
-        final saturation = z;
-        final lightness = (x + y) / 2;
-
-        orbColor = HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
-        final now = DateTime.now();
-        colorHistory.add(ColorEntry(orbColor, now));
-
-        // Remove old colors from history
-        colorHistory.removeWhere((entry) {
-          return now.difference(entry.timestamp).inSeconds > historyDuration;
-        });
-      });
-
-      _animationController.forward(from: 0.0);
-    });
+            _animationController.forward(from: 0.0);
+          });
+          break;
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
-    _channel.sink.close();
+    device.disconnect();
     _animationController.dispose();
     super.dispose();
+  }
+
+  double calculatePhaseDifference(List<double> x, List<double> y) {
+    if (x.length != y.length || x.isEmpty) return 0.0;
+
+    final n = x.length;
+    double sumX = 0.0;
+    double sumY = 0.0;
+    double sumXY = 0.0;
+    double sumX2 = 0.0;
+    double sumY2 = 0.0;
+
+    for (int i = 0; i < n; i++) {
+      sumX += x[i];
+      sumY += y[i];
+      sumXY += x[i] * y[i];
+      sumX2 += x[i] * x[i];
+      sumY2 += y[i] * y[i];
+    }
+
+    final numerator = n * sumXY - sumX * sumY;
+    final denominator = sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    return numerator / denominator;
+  }
+
+  Color getColorFromPhaseDifference(double phaseDifference) {
+    // Map phase difference to a color between green, blue, and purple
+    if (phaseDifference < -0.5) {
+      return Color.lerp(Colors.green, Colors.black, -phaseDifference)!;
+    } else if (phaseDifference < 0.5) {
+      return Color.lerp(Colors.lightBlue, Colors.blue, phaseDifference + 0.5)!;
+    } else {
+      return Color.lerp(Colors.purple, Colors.black, phaseDifference - 0.5)!;
+    }
   }
 
   @override
@@ -482,35 +238,25 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       backgroundColor: Colors.black,
-      body: Row(
-        children: [
-          // Color bar on the left
-          ColorBar(colorHistory: colorHistory, historyDuration: historyDuration),
-          // Orb in the center
-          Expanded(
-            child: Center(
-              child: AnimatedBuilder(
-                animation: _animationController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: Size.infinite,
-                    painter: OrbPainter(xPos, yPos, zPos, orbColor),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _animationController,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size.infinite,
+              painter: OrbPainter(orbColor),
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 class OrbPainter extends CustomPainter {
-  final double xPos, yPos, zPos;
   final Color orbColor;
 
-  OrbPainter(this.xPos, this.yPos, this.zPos, this.orbColor);
+  OrbPainter(this.orbColor);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -525,48 +271,4 @@ class OrbPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class ColorEntry {
-  final Color color;
-  final DateTime timestamp;
-
-  ColorEntry(this.color, this.timestamp);
-}
-
-class ColorBar extends StatelessWidget {
-  final List<ColorEntry> colorHistory;
-  final int historyDuration;
-
-  ColorBar({required this.colorHistory, required this.historyDuration});
-
-  @override
-  Widget build(BuildContext context) {
-    // Calculate the percentage of each color in the history
-    final colorCounts = <Color, int>{};
-    for (var entry in colorHistory) {
-      colorCounts[entry.color] = (colorCounts[entry.color] ?? 0) + 1;
-    }
-
-    final totalCount = colorHistory.length;
-    final colorPercentages = colorCounts.map((color, count) {
-      return MapEntry(color, count / totalCount);
-    });
-
-    return Container(
-      width: 50,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: colorPercentages.entries.map((entry) {
-          return Expanded(
-            flex: (entry.value * 100).toInt(),
-            child: Container(
-              color: entry.key,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
->>>>>>> b31f85c (Initial commit: Added Flutter frontend and Python backend)
 }

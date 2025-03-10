@@ -60,4 +60,4 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 }
->>>>>>> b31f85c (Initial commit: Added Flutter frontend and Python backend)
+>>>>>>> b31f85c (Initial commit = Added Flutter frontend and Python backend)
