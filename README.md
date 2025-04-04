@@ -1,4 +1,4 @@
 # Assisted_Emotion
-A flutter app for real-time emotion visualization
+A wearble and application for real-time emotion visualization
 
  
